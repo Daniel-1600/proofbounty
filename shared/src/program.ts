@@ -2,9 +2,9 @@
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 
-/** Replaced with the devnet deployment ID in Milestone 1 (also Anchor.toml, app/). */
+/** Devnet deployment; keep in sync with Anchor.toml and app/. */
 export const PROGRAM_ID = new PublicKey(
-  "Fg6PaFpoGXkYsidMpWTK6W2BmZ7FEfcYkg476zPFsLnS",
+  "28CYsLKihZfAQWz513EAEXS52hc9npL9frZw1VpPAz3i",
 );
 
 export const BOUNTY_SEED = "bounty";

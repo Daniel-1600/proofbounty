@@ -1,11 +1,11 @@
 //! ProofBounty escrow program.
 //!
-//! Skeleton: accounts, PDA seeds, instruction signatures, events and errors
-//! follow SPEC.md exactly. Handler logic lands in Milestone 1.
+//! Accounts, PDA seeds and instructions follow SPEC.md exactly.
 
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BmZ7FEfcYkg476zPFsLnS");
+declare_id!("28CYsLKihZfAQWz513EAEXS52hc9npL9frZw1VpPAz3i");
 
 pub const BOUNTY_SEED: &[u8] = b"bounty";
 pub const SUBMISSION_SEED: &[u8] = b"sub";
@@ -20,32 +20,215 @@ pub mod proof_bounty {
     use super::*;
 
     pub fn create_bounty(
-        _ctx: Context<CreateBounty>,
-        _bounty_id: u64,
-        _theorem_hash: [u8; 32],
-        _statement_uri: String,
-        _reward: u64,
-        _deadline: i64,
-        _verifiers: [Pubkey; 3],
+        ctx: Context<CreateBounty>,
+        bounty_id: u64,
+        theorem_hash: [u8; 32],
+        statement_uri: String,
+        reward: u64,
+        deadline: i64,
+        verifiers: [Pubkey; 3],
     ) -> Result<()> {
-        err!(ProofBountyError::NotImplemented)
+        require!(
+            statement_uri.len() <= MAX_STATEMENT_URI_LEN,
+            ProofBountyError::StatementUriTooLong
+        );
+        require!(reward > 0, ProofBountyError::ZeroReward);
+        let now = Clock::get()?.unix_timestamp;
+        require!(deadline > now, ProofBountyError::DeadlineInPast);
+        require!(
+            verifiers[0] != verifiers[1]
+                && verifiers[0] != verifiers[2]
+                && verifiers[1] != verifiers[2],
+            ProofBountyError::DuplicateVerifier
+        );
+
+        let bounty = &mut ctx.accounts.bounty;
+        bounty.creator = ctx.accounts.creator.key();
+        bounty.bounty_id = bounty_id;
+        bounty.theorem_hash = theorem_hash;
+        bounty.statement_uri = statement_uri.clone();
+        bounty.reward = reward;
+        bounty.deadline = deadline;
+        bounty.verifiers = verifiers;
+        bounty.status = BountyStatus::Open;
+        bounty.winner = None;
+        bounty.bump = ctx.bumps.bounty;
+
+        // Escrow the reward on top of the PDA's rent-exempt minimum.
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.creator.to_account_info(),
+                    to: ctx.accounts.bounty.to_account_info(),
+                },
+            ),
+            reward,
+        )?;
+
+        emit!(BountyCreated {
+            bounty: ctx.accounts.bounty.key(),
+            creator: ctx.accounts.creator.key(),
+            bounty_id,
+            theorem_hash,
+            statement_uri,
+            reward,
+            deadline,
+            verifiers,
+        });
+        Ok(())
     }
 
     pub fn submit_proof(
-        _ctx: Context<SubmitProof>,
-        _proof_hash: [u8; 32],
-        _proof_uri: String,
+        ctx: Context<SubmitProof>,
+        proof_hash: [u8; 32],
+        proof_uri: String,
     ) -> Result<()> {
-        err!(ProofBountyError::NotImplemented)
+        require!(
+            proof_uri.len() <= MAX_PROOF_URI_LEN,
+            ProofBountyError::ProofUriTooLong
+        );
+        let bounty = &ctx.accounts.bounty;
+        require!(
+            bounty.status == BountyStatus::Open,
+            ProofBountyError::BountyNotOpen
+        );
+        let now = Clock::get()?.unix_timestamp;
+        require!(now <= bounty.deadline, ProofBountyError::DeadlinePassed);
+
+        let submission = &mut ctx.accounts.submission;
+        submission.bounty = bounty.key();
+        submission.solver = ctx.accounts.solver.key();
+        submission.proof_hash = proof_hash;
+        submission.proof_uri = proof_uri.clone();
+        submission.approvals = 0;
+        submission.rejections = 0;
+        submission.status = SubmissionStatus::Pending;
+        submission.bump = ctx.bumps.submission;
+
+        emit!(ProofSubmitted {
+            bounty: bounty.key(),
+            submission: submission.key(),
+            solver: submission.solver,
+            proof_hash,
+            proof_uri,
+        });
+        Ok(())
     }
 
-    pub fn vote(_ctx: Context<Vote>, _approve: bool) -> Result<()> {
-        err!(ProofBountyError::NotImplemented)
+    pub fn vote(ctx: Context<Vote>, approve: bool) -> Result<()> {
+        let verifier = ctx.accounts.verifier.key();
+        let bounty_key = ctx.accounts.bounty.key();
+        let submission_key = ctx.accounts.submission.key();
+
+        require!(
+            ctx.accounts.bounty.status == BountyStatus::Open,
+            ProofBountyError::BountyNotOpen
+        );
+        require!(
+            ctx.accounts.submission.status == SubmissionStatus::Pending,
+            ProofBountyError::SubmissionNotPending
+        );
+        let index = ctx
+            .accounts
+            .bounty
+            .verifiers
+            .iter()
+            .position(|v| *v == verifier)
+            .ok_or(ProofBountyError::NotVerifier)?;
+        let bit = 1u8 << index;
+
+        let submission = &mut ctx.accounts.submission;
+        require!(
+            (submission.approvals | submission.rejections) & bit == 0,
+            ProofBountyError::AlreadyVoted
+        );
+        if approve {
+            submission.approvals |= bit;
+        } else {
+            submission.rejections |= bit;
+        }
+        let (approvals, rejections, solver) =
+            (submission.approvals, submission.rejections, submission.solver);
+
+        emit!(VoteCast {
+            bounty: bounty_key,
+            submission: submission_key,
+            verifier,
+            verifier_index: index as u8,
+            approve,
+            approvals,
+            rejections,
+        });
+
+        if approvals.count_ones() >= VOTE_THRESHOLD {
+            ctx.accounts.submission.status = SubmissionStatus::Accepted;
+            let bounty = &mut ctx.accounts.bounty;
+            bounty.status = BountyStatus::Solved;
+            bounty.winner = Some(solver);
+            let reward = bounty.reward;
+            pay_out(
+                &ctx.accounts.bounty.to_account_info(),
+                &ctx.accounts.solver.to_account_info(),
+                reward,
+            )?;
+            emit!(SubmissionAccepted {
+                bounty: bounty_key,
+                submission: submission_key,
+                solver,
+                reward,
+            });
+        } else if rejections.count_ones() >= VOTE_THRESHOLD {
+            ctx.accounts.submission.status = SubmissionStatus::Rejected;
+            emit!(SubmissionRejected {
+                bounty: bounty_key,
+                submission: submission_key,
+                solver,
+            });
+        }
+        Ok(())
     }
 
-    pub fn refund(_ctx: Context<Refund>) -> Result<()> {
-        err!(ProofBountyError::NotImplemented)
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+        require!(
+            bounty.status == BountyStatus::Open,
+            ProofBountyError::BountyNotOpen
+        );
+        let now = Clock::get()?.unix_timestamp;
+        require!(now > bounty.deadline, ProofBountyError::DeadlineNotReached);
+        bounty.status = BountyStatus::Refunded;
+        let reward = bounty.reward;
+        pay_out(
+            &ctx.accounts.bounty.to_account_info(),
+            &ctx.accounts.creator.to_account_info(),
+            reward,
+        )?;
+        emit!(BountyRefunded {
+            bounty: ctx.accounts.bounty.key(),
+            creator: ctx.accounts.creator.key(),
+            reward,
+        });
+        Ok(())
     }
+}
+
+/// Moves `amount` lamports out of the program-owned bounty PDA, refusing to
+/// dip below its rent-exempt minimum.
+fn pay_out<'info>(
+    from: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    let min = Rent::get()?.minimum_balance(from.data_len());
+    let remaining = from
+        .lamports()
+        .checked_sub(amount)
+        .ok_or(ProofBountyError::Overflow)?;
+    require!(remaining >= min, ProofBountyError::Overflow);
+    from.sub_lamports(amount)?;
+    to.add_lamports(amount)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -240,8 +423,6 @@ pub struct BountyRefunded {
 
 #[error_code]
 pub enum ProofBountyError {
-    #[msg("Not implemented yet")]
-    NotImplemented,
     #[msg("Statement URI exceeds 200 characters")]
     StatementUriTooLong,
     #[msg("Proof URI exceeds 200 characters")]
