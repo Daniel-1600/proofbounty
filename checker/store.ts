@@ -6,6 +6,14 @@ import type { PutBlobResponse } from "@proofbounty/shared";
 
 export function createStore(directory: string, publicUrl: string) {
   const app = express();
+  // The frontend reads and uploads blobs from the browser (another origin).
+  app.use((req, res, next) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+    next();
+  });
   app.use(express.raw({ type: "*/*", limit: "256kb" }));
   app.post("/blob", async (req, res, next) => {
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
