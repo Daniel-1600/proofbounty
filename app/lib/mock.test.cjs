@@ -14,6 +14,7 @@ const { BN } = require("@coral-xyz/anchor");
 const { PublicKey } = require("@solana/web3.js");
 const bs58 = require("bs58").default;
 const { mockClient } = require("./mock.ts");
+const { PROGRAM_ID } = require("../../shared/src/program.ts");
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 async function until(predicate) {
   const end = Date.now() + 2000;
@@ -29,7 +30,7 @@ test("seed accounts, exact hashing, PDA seeds, rejected cheats and winning votes
     assert.deepEqual(row.theoremHash, [...createHash("sha256").update(row.statement).digest()]);
     const [pda] = PublicKey.findProgramAddressSync([
       Buffer.from("bounty"), row.creator.toBuffer(), row.bountyId.toArrayLike(Buffer, "le", 8),
-    ], new PublicKey("Fg6PaFpoGXkYsidMpWTK6W2BmZ7FEfcYkg476zPFsLnS"));
+    ], new PublicKey(PROGRAM_ID.toBase58()));
     assert.equal(pda.toBase58(), row.address.toBase58());
     assert.equal(bs58.decode(row.transaction).length, 64);
   }
@@ -43,7 +44,7 @@ test("seed accounts, exact hashing, PDA seeds, rejected cheats and winning votes
   assert.equal(rows[1].winner.toBase58(), proofs[2].solver.toBase58());
   assert.equal(proofs[2].votes.length, 3);
   for (const proof of proofs) {
-    const [pda] = PublicKey.findProgramAddressSync([Buffer.from("sub"), proof.bounty.toBuffer(), proof.solver.toBuffer()], new PublicKey("Fg6PaFpoGXkYsidMpWTK6W2BmZ7FEfcYkg476zPFsLnS"));
+    const [pda] = PublicKey.findProgramAddressSync([Buffer.from("sub"), proof.bounty.toBuffer(), proof.solver.toBuffer()], new PublicKey(PROGRAM_ID.toBase58()));
     assert.equal(pda.toBase58(), proof.address.toBase58());
     assert.deepEqual(proof.proofHash, [...createHash("sha256").update(proof.proof).digest()]);
     for (const vote of proof.votes) assert.ok(vote.reason.length > 20);
