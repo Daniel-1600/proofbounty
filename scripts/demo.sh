@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # One command: store/verifiers -> bounty -> three rejections -> honest payout.
-# TODO: deploy first, then PROGRAM_ID=<DEVNET_PROGRAM_ID> bash scripts/demo.sh.
-# Requires the real honest agent, its API credential, and funded, distinct keys:
-# creator.json, honest.json, cheater-{0,1,2}.json, verifier-{0,1,2}.json.
+#   npx tsx scripts/fund-agents.ts   # once: keys/ for honest, cheaters, verifiers
+#   bash scripts/demo.sh
+# Needs the Azure settings and (optionally) SOLANA_RPC_URL in .env, the Lean
+# toolchain, and target/idl/proof_bounty.json from `anchor build`.
+# The creator defaults to keys/creator.json, else ~/.config/solana/id.json.
 # Override CREATOR_KEYPAIR, HONEST_KEYPAIR, CHEATER_KEYPAIRS as needed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export PROGRAM_ID="${PROGRAM_ID:-TODO_DEPLOYED_PROGRAM_ID}"
+source scripts/env.sh
+export PROGRAM_ID="${PROGRAM_ID:-28CYsLKihZfAQWz513EAEXS52hc9npL9frZw1VpPAz3i}"
 export PROGRAM_IDL="${PROGRAM_IDL:-$PWD/target/idl/proof_bounty.json}"
-export SOLANA_RPC_URL="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
 export STORE_PORT="${STORE_PORT:-8787}"
 export STORE_URL="${STORE_URL:-http://localhost:$STORE_PORT}"
 export LOG_DIR="${LOG_DIR:-$PWD/logs}"
-export CREATOR_KEYPAIR="${CREATOR_KEYPAIR:-$PWD/keys/creator.json}"
+default_creator="$PWD/keys/creator.json"
+[[ -f "$default_creator" ]] || default_creator="$HOME/.config/solana/id.json"
+export CREATOR_KEYPAIR="${CREATOR_KEYPAIR:-$default_creator}"
 export HONEST_KEYPAIR="${HONEST_KEYPAIR:-$PWD/keys/honest.json}"
 export CHEATER_KEYPAIRS="${CHEATER_KEYPAIRS:-keys/cheater-0.json,keys/cheater-1.json,keys/cheater-2.json}"
 export DEMO_THEOREM="${DEMO_THEOREM:-$PWD/lean/demo/nat_add_zero.lean}"
@@ -134,6 +138,7 @@ NODE
 }
 
 chain preflight
+echo "RPC: $(rpc_host)"
 mkdir -p "$LOG_DIR"
 launcher_pid=""
 cleanup() {
