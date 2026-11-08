@@ -64,9 +64,40 @@ test("real Anchor IDL decodes accounts, filters proofs, uploads exact bytes and 
   assert.ok(BN.isBN(view.reward));
   assert.equal(view.transaction, "");
   assert.equal(await anchorClient.getBounty(Keypair.generate().publicKey.toBase58()), null);
+  // Submission history: submit_proof, three memo'd votes, and one spoofed memo
+  // signed by a non-verifier that claims to be verifier 2.
+  const { MEMO_PROGRAM_ID, encodeVoteMemo } = require("../../shared/src/program.ts");
+  const outsider = Keypair.generate().publicKey;
+  const parsed = (signer, memo, withProgram = true) => ({
+    blockTime: 1700000000,
+    transaction: { message: {
+      accountKeys: [{ pubkey: signer, signer: true, writable: true }],
+      instructions: [
+        ...(withProgram ? [{ programId: program.programId, accounts: [], data: "" }] : []),
+        ...(memo ? [{ programId: MEMO_PROGRAM_ID, parsed: encodeVoteMemo(memo), program: "spl-memo" }] : []),
+      ],
+    } },
+  });
+  const history = {
+    "spoof": parsed(outsider, { v: 2, ok: true, reason: "spoofed" }),
+    "vote-2": parsed(verifiers[2], { v: 2, ok: true, reason: "Lean accepted proof" }),
+    "vote-1": parsed(verifiers[1], { v: 1, ok: false, reason: "Forbidden axioms: sorryAx" }),
+    "vote-0": parsed(verifiers[0], { v: 0, ok: true, reason: "Lean accepted proof" }),
+    "submit": parsed(submission.solver, null),
+  };
+  t.mock.method(Connection.prototype, "getSignaturesForAddress", async (address) => {
+    assert.ok(address.equals(submissionAddress));
+    // Newest first, as the RPC returns them.
+    return Object.keys(history).map((signature) => ({ signature, err: null, blockTime: 1700000000 }));
+  });
+  t.mock.method(Connection.prototype, "getParsedTransactions", async (signatures) => signatures.map((s) => history[s]));
   const [proofView] = await anchorClient.listSubmissions(bountyAddress.toBase58());
   assert.equal(proofView.proof, proof);
   assert.deepEqual(proofView.votes.map((vote) => vote.approve), [true, false, true]);
+  assert.deepEqual(proofView.votes.map((vote) => vote.reason), ["Lean accepted proof", "Forbidden axioms: sorryAx", "Lean accepted proof"]);
+  assert.deepEqual(proofView.votes.map((vote) => vote.transaction), ["vote-0", "vote-1", "vote-2"]);
+  assert.equal(proofView.transaction, "submit");
+  assert.equal(proofView.submittedAt, 1700000000000);
   assert.deepEqual(proofView.votes.map((vote) => vote.verifier.toBase58()), verifiers.map((key) => key.toBase58()));
 
   const blockhash = Keypair.generate().publicKey.toBase58();
