@@ -15,6 +15,12 @@ pub const MAX_PROOF_URI_LEN: usize = 200;
 pub const NUM_VERIFIERS: usize = 3;
 pub const VOTE_THRESHOLD: u32 = 2;
 
+/// Byte offsets (including the 8-byte discriminator) for getProgramAccounts
+/// memcmp filters. Variable-length strings are stored last so these are fixed.
+pub const BOUNTY_STATUS_OFFSET: usize = 8 + 32 + 8 + 32 + 8 + 8 + 32 * 3;
+pub const SUBMISSION_BOUNTY_OFFSET: usize = 8;
+pub const SUBMISSION_STATUS_OFFSET: usize = 8 + 32 + 32 + 32 + 1 + 1;
+
 #[program]
 pub mod proof_bounty {
     use super::*;
@@ -244,14 +250,16 @@ pub struct Bounty {
     pub bounty_id: u64,
     /// sha256 of the exact statement text.
     pub theorem_hash: [u8; 32],
-    #[max_len(MAX_STATEMENT_URI_LEN)]
-    pub statement_uri: String,
     pub reward: u64,
     pub deadline: i64,
     pub verifiers: [Pubkey; 3],
+    /// Fixed offset (BOUNTY_STATUS_OFFSET) so clients can memcmp-filter on it.
     pub status: BountyStatus,
     pub winner: Option<Pubkey>,
     pub bump: u8,
+    /// Variable-length, so it goes last to keep the fields above at fixed offsets.
+    #[max_len(MAX_STATEMENT_URI_LEN)]
+    pub statement_uri: String,
 }
 
 /// PDA seeds: `[b"sub", bounty, solver]`.
@@ -261,14 +269,16 @@ pub struct Submission {
     pub bounty: Pubkey,
     pub solver: Pubkey,
     pub proof_hash: [u8; 32],
-    #[max_len(MAX_PROOF_URI_LEN)]
-    pub proof_uri: String,
     /// Bitmask: bit i set when verifiers[i] approved.
     pub approvals: u8,
     /// Bitmask: bit i set when verifiers[i] rejected.
     pub rejections: u8,
+    /// Fixed offset (SUBMISSION_STATUS_OFFSET) so clients can memcmp-filter on it.
     pub status: SubmissionStatus,
     pub bump: u8,
+    /// Variable-length, so it goes last to keep the fields above at fixed offsets.
+    #[max_len(MAX_PROOF_URI_LEN)]
+    pub proof_uri: String,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
@@ -447,4 +457,44 @@ pub enum ProofBountyError {
     SubmissionNotPending,
     #[msg("Arithmetic overflow")]
     Overflow,
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    #[test]
+    fn status_offsets_match_serialized_layout() {
+        let bounty = Bounty {
+            creator: Pubkey::new_unique(),
+            bounty_id: 7,
+            theorem_hash: [1; 32],
+            reward: 5,
+            deadline: 9,
+            verifiers: [Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique()],
+            status: BountyStatus::Refunded,
+            winner: Some(Pubkey::new_unique()),
+            bump: 3,
+            statement_uri: "http://x/blob/abc".to_string(),
+        };
+        let mut data = Vec::new();
+        bounty.try_serialize(&mut data).unwrap();
+        assert_eq!(data[BOUNTY_STATUS_OFFSET], 2);
+
+        let submission = Submission {
+            bounty: Pubkey::new_unique(),
+            solver: Pubkey::new_unique(),
+            proof_hash: [2; 32],
+            approvals: 0b101,
+            rejections: 0b010,
+            status: SubmissionStatus::Rejected,
+            bump: 4,
+            proof_uri: "http://x/blob/def".to_string(),
+        };
+        let mut data = Vec::new();
+        submission.try_serialize(&mut data).unwrap();
+        assert_eq!(&data[SUBMISSION_BOUNTY_OFFSET..SUBMISSION_BOUNTY_OFFSET + 32], submission.bounty.as_ref());
+        assert_eq!(data[SUBMISSION_STATUS_OFFSET], 2);
+        assert_eq!(data[SUBMISSION_STATUS_OFFSET - 2], 0b101);
+    }
 }

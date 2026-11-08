@@ -4,6 +4,9 @@ import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web
 import { createHash } from "crypto";
 import { expect } from "chai";
 import type { ProofBounty } from "../target/types/proof_bounty";
+import {
+  bountyStatusFilter, listAccounts, submissionBountyFilter, submissionStatusFilter,
+} from "../shared/src";
 
 const provider = anchor.AnchorProvider.env();
 anchor.setProvider(provider);
@@ -180,5 +183,26 @@ describe("proof_bounty", () => {
     const after = await connection.getBalance(ctx.creator.publicKey);
     expect(after).to.be.greaterThan(before + REWARD.toNumber() - 10_000);
     await expectError(refund(), "BountyNotOpen");
+  });
+
+  it("filters accounts by status with memcmp at fixed offsets", async () => {
+    const ctx = await newBounty();
+    const a = await funded(1);
+    const b = await funded(1);
+    const subA = await submit(ctx, a);
+    const subB = await submit(ctx, b);
+    await vote(ctx, ctx.verifiers[0], subA, a.publicKey, false);
+    await vote(ctx, ctx.verifiers[1], subA, a.publicKey, false);
+
+    const keys = (rows: { publicKey: PublicKey }[]) => rows.map((r) => r.publicKey.toBase58());
+    const forBounty = submissionBountyFilter(ctx.bounty);
+    expect(keys(await listAccounts(program as any, "submission", [forBounty, submissionStatusFilter("pending")]))).to.deep.equal([subB.toBase58()]);
+    expect(keys(await listAccounts(program as any, "submission", [forBounty, submissionStatusFilter("rejected")]))).to.deep.equal([subA.toBase58()]);
+    expect(keys(await listAccounts(program as any, "bounty", [bountyStatusFilter("open")]))).to.include(ctx.bounty.toBase58());
+
+    await vote(ctx, ctx.verifiers[0], subB, b.publicKey, true);
+    await vote(ctx, ctx.verifiers[1], subB, b.publicKey, true);
+    expect(keys(await listAccounts(program as any, "bounty", [bountyStatusFilter("open")]))).not.to.include(ctx.bounty.toBase58());
+    expect(keys(await listAccounts(program as any, "bounty", [bountyStatusFilter("solved")]))).to.include(ctx.bounty.toBase58());
   });
 });

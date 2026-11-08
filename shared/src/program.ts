@@ -102,3 +102,64 @@ export function explorerTx(sig: string): string {
 export function explorerAddress(addr: PublicKey | string): string {
   return `https://explorer.solana.com/address/${addr.toString()}?cluster=devnet`;
 }
+
+// ---------------------------------------------------------------------------
+// getProgramAccounts filters. Offsets include the 8-byte discriminator and
+// match the constants in lib.rs (strings are stored last in each account).
+// ---------------------------------------------------------------------------
+
+export const BOUNTY_STATUS_OFFSET = 8 + 32 + 8 + 32 + 8 + 8 + 32 * 3; // 192
+export const SUBMISSION_BOUNTY_OFFSET = 8;
+export const SUBMISSION_STATUS_OFFSET = 8 + 32 + 32 + 32 + 1 + 1; // 106
+
+/** Borsh enum tags. */
+export const BOUNTY_STATUS_TAG = { open: 0, solved: 1, refunded: 2 } as const;
+export const SUBMISSION_STATUS_TAG = { pending: 0, accepted: 1, rejected: 2 } as const;
+
+// base58 of a single byte 0..57 is one character of the alphabet.
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const byteFilter = (offset: number, tag: number) => ({ memcmp: { offset, bytes: B58[tag] } });
+
+export function bountyStatusFilter(status: keyof typeof BOUNTY_STATUS_TAG) {
+  return byteFilter(BOUNTY_STATUS_OFFSET, BOUNTY_STATUS_TAG[status]);
+}
+export function submissionStatusFilter(status: keyof typeof SUBMISSION_STATUS_TAG) {
+  return byteFilter(SUBMISSION_STATUS_OFFSET, SUBMISSION_STATUS_TAG[status]);
+}
+export function submissionBountyFilter(bounty: PublicKey) {
+  return { memcmp: { offset: SUBMISSION_BOUNTY_OFFSET, bytes: bounty.toBase58() } };
+}
+
+// ---------------------------------------------------------------------------
+// Vote memos. The program does not store checker reasons, so each verifier
+// adds an SPL Memo instruction to its vote transaction; the UI reads it back.
+// ---------------------------------------------------------------------------
+
+export const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+export const VOTE_MEMO_PREFIX = "proofbounty-vote:";
+const MAX_MEMO_REASON = 180;
+
+export interface VoteMemo {
+  /** Verifier index 0..2. */
+  v: number;
+  ok: boolean;
+  reason: string;
+}
+
+export function encodeVoteMemo(memo: VoteMemo): string {
+  const reason = memo.reason.length > MAX_MEMO_REASON ? memo.reason.slice(0, MAX_MEMO_REASON - 1) + "…" : memo.reason;
+  return VOTE_MEMO_PREFIX + JSON.stringify({ v: memo.v, ok: memo.ok, reason });
+}
+
+/** Parses a memo string; returns null for anything that is not a vote memo. */
+export function decodeVoteMemo(text: string): VoteMemo | null {
+  const start = text.indexOf(VOTE_MEMO_PREFIX);
+  if (start < 0) return null;
+  try {
+    const value = JSON.parse(text.slice(start + VOTE_MEMO_PREFIX.length));
+    if (![0, 1, 2].includes(value?.v) || typeof value.ok !== "boolean" || typeof value.reason !== "string") return null;
+    return { v: value.v, ok: value.ok, reason: value.reason };
+  } catch {
+    return null;
+  }
+}
