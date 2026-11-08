@@ -1,0 +1,17 @@
+{
+  "name": "@proofbounty/checker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "store": "tsx store.ts",
+    "verifier": "tsx src/verifier.ts",
+    "test": "mocha -r tsx 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@proofbounty/shared": "0.1.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21"
+  }
+}

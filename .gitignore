@@ -1,0 +1,20 @@
+# Secrets: never commit keypairs or env files
+.env
+.env.*
+!.env.example
+keys/
+*.keypair.json
+*-keypair.json
+id.json
+
+# Build output
+node_modules/
+target/
+.anchor/
+test-ledger/
+dist/
+.next/
+lean/.lake/
+*.olean
+
+.DS_Store
