@@ -21,6 +21,6 @@ export function SubmissionCard({ submission, bounty }: { submission: SubmissionV
         {vote && <ExplorerLink transaction={vote.transaction} label="Vote transaction" />}
       </div>;
     })}</div>
-    <div className="flex flex-wrap justify-between gap-3 text-xs text-slate-500"><span>{new Date(submission.submittedAt).toLocaleTimeString()} · {submission.votes.filter((v) => v.approve).length} approvals / {submission.votes.filter((v) => !v.approve).length} rejections · 2 of 3 required</span><div className="flex gap-4"><ExplorerLink address={submission.address} label="Submission account" /><ExplorerLink transaction={submission.transaction} label="Submit transaction" /></div></div>
+    <div className="flex flex-wrap justify-between gap-3 text-xs text-slate-500"><span>{submission.submittedAt ? `${new Date(submission.submittedAt).toLocaleTimeString()} · ` : ""}{submission.votes.filter((v) => v.approve).length} approvals / {submission.votes.filter((v) => !v.approve).length} rejections · 2 of 3 required</span><div className="flex gap-4"><ExplorerLink address={submission.address} label="Submission account" /><ExplorerLink transaction={submission.transaction} label="Submit transaction" /></div></div>
   </article>;
 }

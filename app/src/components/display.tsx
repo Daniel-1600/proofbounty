@@ -21,6 +21,7 @@ export function sol(lamports: { toString(): string }) {
 export function short(address: string) { return `${address.slice(0, 5)}…${address.slice(-5)}`; }
 export function ExplorerLink({ address, transaction, label }: { address?: PublicKey; transaction?: string; label?: string }) {
   const value = transaction ?? address?.toBase58() ?? "";
+  if (!value) return null;
   return <a className="explorer" href={`https://explorer.solana.com/${transaction ? "tx" : "address"}/${value}?cluster=devnet`} target="_blank" rel="noopener noreferrer" title={value}>{label ?? short(value)} ↗</a>;
 }
 export function ErrorMessage({ message }: { message: string }) {

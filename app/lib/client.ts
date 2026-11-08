@@ -2,6 +2,8 @@ import type { PublicKey } from "@solana/web3.js";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import type { Bounty, Submission, CreateBountyArgs } from "../../shared/src/program";
 import { mockClient } from "./mock";
+import { anchorClient } from "./anchor-client";
+import { RPC_URL } from "../src/lib/config";
 
 /** Shared Anchor account fields plus content from the store and verifier logs. */
 export interface BountyView extends Bounty {
@@ -46,8 +48,8 @@ export interface BountyClient {
   /** Full snapshots. Returns cleanup. Missing accounts/errors arrive as Error. */
   subscribe(bounty: string, callback: (update: BountyUpdate | Error) => void): () => void;
 }
-// Replace this adapter with Anchor + blob-store access; UI imports only this module.
-export const client: BountyClient = mockClient;
+export const useMock = (process.env.NEXT_PUBLIC_USE_MOCK ?? "true") !== "false";
+export const client: BountyClient = useMock ? mockClient : anchorClient;
 
 /** Wallet adapter uses the same devnet endpoint as the future Anchor client. */
-export const walletEndpoint = "https://api.devnet.solana.com";
+export const walletEndpoint = RPC_URL;
