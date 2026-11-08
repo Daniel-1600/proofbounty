@@ -141,11 +141,16 @@ chain preflight
 echo "RPC: $(rpc_host)"
 mkdir -p "$LOG_DIR"
 launcher_pid=""
+# Stops the store and verifiers (run-verifiers.sh stops its whole process
+# groups on TERM). Bounded: escalates to KILL if the launcher does not exit.
 cleanup() {
   trap - EXIT INT TERM
   if [[ -n "$launcher_pid" ]]; then
     kill -TERM "$launcher_pid" 2>/dev/null || true
+    for _ in {1..100}; do kill -0 "$launcher_pid" 2>/dev/null || break; sleep 0.1; done
+    kill -KILL "$launcher_pid" 2>/dev/null || true
     wait "$launcher_pid" 2>/dev/null || true
+    launcher_pid=""
   fi
 }
 trap cleanup EXIT
@@ -164,7 +169,12 @@ done
 export BOUNTY
 BOUNTY="$(chain post)"
 echo "Bounty: $BOUNTY"
-node --require tsx/cjs agents/cheater-agent.ts "$BOUNTY"
+# Bound each agent so a stuck RPC call or model request cannot hang the demo.
+AGENT_TIMEOUT="${AGENT_TIMEOUT:-600}"
+timeout "$AGENT_TIMEOUT" node --require tsx/cjs agents/cheater-agent.ts "$BOUNTY"
 chain rejected
-AGENT_KEYPAIR="$HONEST_KEYPAIR" node --require tsx/cjs agents/honest-agent.ts "$BOUNTY"
+AGENT_KEYPAIR="$HONEST_KEYPAIR" timeout "$AGENT_TIMEOUT" node --require tsx/cjs agents/honest-agent.ts "$BOUNTY"
 chain accepted
+# Payout verified: stop the store and verifiers now rather than leaving them running.
+cleanup
+echo "Demo complete: bounty $BOUNTY solved and paid. Store and verifiers stopped; logs in $LOG_DIR."
