@@ -21,3 +21,6 @@ lean/.lake/
 
 # Agent run logs
 agents/logs/
+
+# demo.sh / run-verifiers.sh logs and blobs
+logs/

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -173,6 +174,9 @@ export class AnchorVerifierChain implements VerifierChain {
 }
 
 export async function main(): Promise<void> {
+  // Settings such as a private SOLANA_RPC_URL; the environment takes precedence.
+  const dotenv = resolve(__dirname, "../../.env");
+  if (existsSync(dotenv)) process.loadEnvFile(dotenv);
   const index = Number(process.env.VERIFIER_INDEX ?? "invalid");
   if (![0, 1, 2].includes(index)) throw new Error("VERIFIER_INDEX must be 0, 1 or 2");
   const keyPath = process.env.VERIFIER_KEYPAIR ?? resolve(__dirname, `../../keys/verifier-${index}.json`);

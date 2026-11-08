@@ -2,8 +2,8 @@
 # Store + three verifier daemons. Requires generated deployment IDL and funded keys.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/env.sh
 export PROGRAM_IDL="${PROGRAM_IDL:-$PWD/target/idl/proof_bounty.json}"
-export SOLANA_RPC_URL="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
 export STORE_PORT="${STORE_PORT:-8787}"
 export STORE_URL="${STORE_URL:-http://localhost:$STORE_PORT}"
 export LOG_DIR="${LOG_DIR:-$PWD/logs}"
