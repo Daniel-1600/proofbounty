@@ -1,34 +1,44 @@
-// Content-addressed blob store. Production option: IPFS (see README).
 import express from "express";
-import { DEFAULT_STORE_URL, PutBlobResponse, sha256Hex } from "@proofbounty/shared";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { DEFAULT_STORE_URL, sha256Hex } from "@proofbounty/shared";
+import type { PutBlobResponse } from "@proofbounty/shared";
 
-const PORT = Number(process.env.STORE_PORT ?? 8787);
-const PUBLIC_URL = process.env.STORE_URL ?? DEFAULT_STORE_URL;
-const blobs = new Map<string, string>();
-
-export const app = express();
-app.use(express.text({ type: "*/*", limit: "256kb" }));
-
-app.post("/blob", (req, res) => {
-  if (typeof req.body !== "string" || req.body.length === 0) {
-    res.status(400).json({ error: "body must be non-empty text" });
-    return;
-  }
-  const hash = sha256Hex(req.body);
-  blobs.set(hash, req.body);
-  const out: PutBlobResponse = { hash, uri: `${PUBLIC_URL}/blob/${hash}` };
-  res.json(out);
-});
-
-app.get("/blob/:hash", (req, res) => {
-  const content = blobs.get(req.params.hash);
-  if (content === undefined) {
-    res.status(404).json({ error: "not found" });
-    return;
-  }
-  res.type("text/plain; charset=utf-8").send(content);
-});
-
+export function createStore(directory: string, publicUrl: string) {
+  const app = express();
+  app.use(express.raw({ type: "*/*", limit: "256kb" }));
+  app.post("/blob", async (req, res, next) => {
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      res.status(400).json({ error: "body must be non-empty text" }); return;
+    }
+    let content: string;
+    try { content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(req.body); }
+    catch { res.status(400).json({ error: "body must be valid UTF-8" }); return; }
+    try {
+      const hash = sha256Hex(content);
+      await mkdir(directory, { recursive: true });
+      // Exclusive creation makes repeated uploads idempotent and immutable.
+      try { await writeFile(resolve(directory, hash), content, { flag: "wx" }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+      const out: PutBlobResponse = { hash, uri: `${publicUrl.replace(/\/$/, "")}/blob/${hash}` };
+      res.json(out);
+    } catch (error) { next(error); }
+  });
+  app.get("/blob/:hash", async (req, res, next) => {
+    if (!/^[a-f0-9]{64}$/.test(req.params.hash)) { res.status(400).json({ error: "invalid hash" }); return; }
+    try {
+      const content = await readFile(resolve(directory, req.params.hash), "utf8");
+      if (sha256Hex(content) !== req.params.hash) { res.status(500).json({ error: "corrupt blob" }); return; }
+      res.type("text/plain; charset=utf-8").send(content);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") res.status(404).json({ error: "not found" });
+      else next(error);
+    }
+  });
+  return app;
+}
+export const app = createStore(process.env.STORE_DIR ?? resolve(__dirname, "blobs"), process.env.STORE_URL ?? DEFAULT_STORE_URL);
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`store listening on :${PORT}`));
+  const port = Number(process.env.STORE_PORT ?? 8787);
+  app.listen(port, "127.0.0.1", () => console.log(`store listening on 127.0.0.1:${port}`));
 }
