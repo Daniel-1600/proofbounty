@@ -1,8 +1,8 @@
 # ProofBounty — two-minute video script
 
-**Recording status: TODO.** This is the target recording plan. Escrow handlers, agents, funding, devnet deployment, the Next.js UI and `scripts/demo.sh` must be completed first. Record real confirmed transactions and checker logs. Replace `<BOUNTY_ADDRESS>`, `<SOLVER_ADDRESS>` and `<PAYOUT_VOTE_SIGNATURE>` with captured values; the payout occurs inside the second approving vote transaction.
+**Recording status:** everything shown is implemented and was run on devnet (see the README's devnet evidence). Record a fresh run and replace `<BOUNTY_ADDRESS>`, `<SOLVER_ADDRESS>` and `<PAYOUT_VOTE_SIGNATURE>` with its values; the payout occurs inside the second approving vote transaction. Reference run: bounty `h6nuhfTKcE58RLPuo2XXpSBKWWnFiPKAEs4EaRPEgVL`, payout vote `Coha5Zya9oL1KQLcEty1P4HefbKNAnAZBtboHQUSE7nQnT9JVDtdSzZU1yo2iVXoCivuHtmuRcKv1jXbq1Am22v`.
 
-Before recording, prepare funded creator, cheater, honest-agent and three verifier wallets on devnet. Start the store, three verifiers and frontend. Use the exact statement `∀ n : Nat, n + 0 = n`, a reward of **0.1 SOL**, and a future deadline. Have the cheater submit `by sorry`; the known-good proof body is `by intro n; rfl`. TODO: implement the honest agent using Azure OpenAI gpt-6-luna and record its actual generated proof and local check. Prepare the UI beside daemon logs and keep Explorer ready. If waiting takes longer, cut the wait with an explicit “after confirmation” caption while preserving the real result.
+Before recording, run `npx tsx scripts/fund-agents.ts` to create and fund the cheater, honest-agent and verifier wallets. Start `bash scripts/run-verifiers.sh` (store and three verifiers) and the frontend. Use the exact statement `∀ n : Nat, n + 0 = n`, a reward of **0.1 SOL**, and a future deadline. Have the cheater submit `by sorry`; the known-good proof body is `by intro n; rfl`. In the reference run gpt-6-luna produced `by intro n; rfl` on its first attempt. Prepare the UI beside daemon logs and keep Explorer ready. If waiting takes longer, cut the wait with an explicit “after confirmation” caption while preserving the real result.
 
 ## 0:00–0:15 — The problem (15 seconds)
 
@@ -18,13 +18,13 @@ Before recording, prepare funded creator, cheater, honest-agent and three verifi
 
 ## 0:35–1:05 — Cheater rejected, with the reason (30 seconds)
 
-**Show:** Start the implemented cheater command for `<BOUNTY_ADDRESS>` (TODO: define its final CLI). Show the cheater wallet and submitted `by sorry`. Zoom in on the daemon's actual reason **`Banned token in proof: sorry`**. Show two rejection votes, the red **Rejected** submission badge and the still-open bounty with its reward in escrow. Show that the cheater receives no reward.
+**Show:** Run `npx tsx agents/cheater-agent.ts <BOUNTY_ADDRESS>`. It submits three cheats from three wallets: `sorry`, `native_decide` and `exact sorryAx _ false`. Show the `sorry` submission. Zoom in on the daemon's actual reason **`Banned token in proof: sorry`**. Show two rejection votes, the red **Rejected** submission badge and the still-open bounty with its reward in escrow. Show that the cheater receives no reward.
 
 **Say:** “This agent tries to cheat with sorry. Lean can represent an unfinished proof, but our checker rejects that token before Lean runs. Here is the exact reason: banned token in proof, sorry. Two checkers reject the submission, so it receives no reward. The bounty remains open. We also audit the finished theorem's axioms, catching hidden admissions and compiler-trust assumptions that a token scan alone could miss.”
 
 ## 1:05–1:40 — Honest proof accepted and SOL paid (35 seconds)
 
-**Show:** Start the implemented honest-agent command for the same bounty (TODO: define its final CLI). Show Azure OpenAI gpt-6-luna producing a proof body, its local checker result, and the uploaded submission from `<SOLVER_ADDRESS>`. Zoom in on **`Lean accepted proof`**, then the second approval, **Accepted**, **Solved** and winner address. Open `https://explorer.solana.com/tx/<PAYOUT_VOTE_SIGNATURE>?cluster=devnet`. Show confirmation and the solver's 0.1 SOL reward in transaction balance changes; account for fees separately.
+**Show:** Run `npx tsx agents/honest-agent.ts <BOUNTY_ADDRESS>`. Show Azure OpenAI gpt-6-luna producing a proof body, its local checker result, and the uploaded submission from `<SOLVER_ADDRESS>`. Zoom in on **`Lean accepted proof`**, then the second approval, **Accepted**, **Solved** and winner address. Open `https://explorer.solana.com/tx/<PAYOUT_VOTE_SIGNATURE>?cluster=devnet`. Show confirmation and the solver's 0.1 SOL reward in transaction balance changes; account for fees separately.
 
 **Say:** “The honest agent uses Azure OpenAI gpt-6-luna to produce a proof body and checks it locally. The verifiers fetch the committed statement and proof, then Lean accepts the theorem under our axiom policy. On the second approval, escrow marks the bounty solved and pays point one SOL to this solver. This devnet Explorer transaction is the approving vote that triggers the payout. Its balance changes show the reward reaching the agent's wallet.”
 
