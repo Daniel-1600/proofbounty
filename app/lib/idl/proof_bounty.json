@@ -5,9 +5,6 @@
     "version": "0.1.0",
     "spec": "0.1.0"
   },
-  "docs": [
-    "Hand-written from programs/proof_bounty/src/lib.rs in Anchor 0.31 format. Replace with target/idl/proof_bounty.json after anchor build."
-  ],
   "instructions": [
     {
       "name": "create_bounty",
@@ -95,6 +92,58 @@
           }
         }
       ]
+    },
+    {
+      "name": "refund",
+      "discriminator": [
+        2,
+        96,
+        183,
+        251,
+        63,
+        208,
+        46,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bounty"
+          ]
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.bounty_id",
+                "account": "Bounty"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
     },
     {
       "name": "submit_proof",
@@ -263,10 +312,7 @@
         },
         {
           "name": "solver",
-          "writable": true,
-          "relations": [
-            "submission"
-          ]
+          "writable": true
         }
       ],
       "args": [
@@ -275,58 +321,6 @@
           "type": "bool"
         }
       ]
-    },
-    {
-      "name": "refund",
-      "discriminator": [
-        2,
-        96,
-        183,
-        251,
-        63,
-        208,
-        46,
-        46
-      ],
-      "accounts": [
-        {
-          "name": "creator",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "bounty"
-          ]
-        },
-        {
-          "name": "bounty",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  111,
-                  117,
-                  110,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "creator"
-              },
-              {
-                "kind": "account",
-                "path": "bounty.bounty_id",
-                "account": "Bounty"
-              }
-            ]
-          }
-        }
-      ],
-      "args": []
     }
   ],
   "accounts": [
@@ -372,6 +366,19 @@
       ]
     },
     {
+      "name": "BountyRefunded",
+      "discriminator": [
+        158,
+        18,
+        109,
+        41,
+        239,
+        13,
+        79,
+        43
+      ]
+    },
+    {
       "name": "ProofSubmitted",
       "discriminator": [
         160,
@@ -382,19 +389,6 @@
         89,
         5,
         139
-      ]
-    },
-    {
-      "name": "VoteCast",
-      "discriminator": [
-        39,
-        53,
-        195,
-        104,
-        188,
-        17,
-        225,
-        213
       ]
     },
     {
@@ -424,16 +418,16 @@
       ]
     },
     {
-      "name": "BountyRefunded",
+      "name": "VoteCast",
       "discriminator": [
-        158,
-        18,
-        109,
-        41,
-        239,
-        13,
-        79,
-        43
+        39,
+        53,
+        195,
+        104,
+        188,
+        17,
+        225,
+        213
       ]
     }
   ],
@@ -502,6 +496,10 @@
   "types": [
     {
       "name": "Bounty",
+      "docs": [
+        "PDA seeds: `[b\"bounty\", creator, bounty_id.to_le_bytes()]`.",
+        "Holds the reward in lamports on top of its rent-exempt minimum."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -515,16 +513,15 @@
           },
           {
             "name": "theorem_hash",
+            "docs": [
+              "sha256 of the exact statement text."
+            ],
             "type": {
               "array": [
                 "u8",
                 32
               ]
             }
-          },
-          {
-            "name": "statement_uri",
-            "type": "string"
           },
           {
             "name": "reward",
@@ -545,6 +542,9 @@
           },
           {
             "name": "status",
+            "docs": [
+              "Fixed offset (BOUNTY_STATUS_OFFSET) so clients can memcmp-filter on it."
+            ],
             "type": {
               "defined": {
                 "name": "BountyStatus"
@@ -560,55 +560,13 @@
           {
             "name": "bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "Submission",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bounty",
-            "type": "pubkey"
           },
           {
-            "name": "solver",
-            "type": "pubkey"
-          },
-          {
-            "name": "proof_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "proof_uri",
+            "name": "statement_uri",
+            "docs": [
+              "Variable-length, so it goes last to keep the fields above at fixed offsets."
+            ],
             "type": "string"
-          },
-          {
-            "name": "approvals",
-            "type": "u8"
-          },
-          {
-            "name": "rejections",
-            "type": "u8"
-          },
-          {
-            "name": "status",
-            "type": {
-              "defined": {
-                "name": "SubmissionStatus"
-              }
-            }
-          },
-          {
-            "name": "bump",
-            "type": "u8"
           }
         ]
       }
@@ -664,6 +622,43 @@
       }
     },
     {
+      "name": "BountyRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Solved"
+          },
+          {
+            "name": "Refunded"
+          }
+        ]
+      }
+    },
+    {
       "name": "ProofSubmitted",
       "type": {
         "kind": "struct",
@@ -697,7 +692,10 @@
       }
     },
     {
-      "name": "VoteCast",
+      "name": "Submission",
+      "docs": [
+        "PDA seeds: `[b\"sub\", bounty, solver]`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -706,28 +704,53 @@
             "type": "pubkey"
           },
           {
-            "name": "submission",
+            "name": "solver",
             "type": "pubkey"
           },
           {
-            "name": "verifier",
-            "type": "pubkey"
-          },
-          {
-            "name": "verifier_index",
-            "type": "u8"
-          },
-          {
-            "name": "approve",
-            "type": "bool"
+            "name": "proof_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "approvals",
+            "docs": [
+              "Bitmask: bit i set when verifiers[i] approved."
+            ],
             "type": "u8"
           },
           {
             "name": "rejections",
+            "docs": [
+              "Bitmask: bit i set when verifiers[i] rejected."
+            ],
             "type": "u8"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Fixed offset (SUBMISSION_STATUS_OFFSET) so clients can memcmp-filter on it."
+            ],
+            "type": {
+              "defined": {
+                "name": "SubmissionStatus"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "proof_uri",
+            "docs": [
+              "Variable-length, so it goes last to keep the fields above at fixed offsets."
+            ],
+            "type": "string"
           }
         ]
       }
@@ -777,43 +800,6 @@
       }
     },
     {
-      "name": "BountyRefunded",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bounty",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "reward",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "BountyStatus",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Open"
-          },
-          {
-            "name": "Solved"
-          },
-          {
-            "name": "Refunded"
-          }
-        ]
-      }
-    },
-    {
       "name": "SubmissionStatus",
       "type": {
         "kind": "enum",
@@ -826,6 +812,42 @@
           },
           {
             "name": "Rejected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteCast",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "submission",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier_index",
+            "type": "u8"
+          },
+          {
+            "name": "approve",
+            "type": "bool"
+          },
+          {
+            "name": "approvals",
+            "type": "u8"
+          },
+          {
+            "name": "rejections",
+            "type": "u8"
           }
         ]
       }
