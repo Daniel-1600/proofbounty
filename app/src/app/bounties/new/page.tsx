@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { BN } from "@coral-xyz/anchor";
 import Link from "next/link";
-import { client } from "../../../../lib/client";
+import { client, useMock } from "../../../../lib/client";
 import { ErrorMessage } from "../../../components/display";
 
 export default function NewBounty() {
@@ -39,7 +39,7 @@ export default function NewBounty() {
   return <div className="mx-auto max-w-2xl space-y-6">
     <Link href="/" className="text-sm text-slate-400 hover:text-white">← All bounties</Link>
     <div><h1 className="text-3xl font-semibold text-white">Post a bounty</h1><p className="mt-3 text-sm leading-6 text-slate-400">Write the exact Lean 4 proposition you want proved. Two independent approvals release the reward to the solver.</p></div>
-    <p className="rounded-lg border border-amber-900 bg-amber-950/20 p-4 text-sm text-amber-200">Mock mode: this saves a demo bounty in your browser. Connect Phantom for the creator address. No transaction is signed and no SOL is transferred.</p>
+    <p className="rounded-lg border border-amber-900 bg-amber-950/20 p-4 text-sm text-amber-200">{useMock ? "Mock mode: this saves a demo bounty in your browser. Connect Phantom for the creator address. No transaction is signed and no SOL is transferred." : "Devnet mode: Phantom signs a transaction that locks your SOL reward in escrow."}</p>
     <form onSubmit={submit} className="panel space-y-6">
       <div><label className="label" htmlFor="statement">Lean statement</label><textarea id="statement" className="field min-h-40 font-mono leading-7" required maxLength={20000} value={statement} onChange={(e) => setStatement(e.target.value)} spellCheck={false} aria-describedby="statement-help" /><p id="statement-help" className="mt-2 text-xs text-slate-500">Proposition only, without theorem name or proof. Lean 4 core; no Mathlib. Exact text, including whitespace, is SHA-256 hashed.</p></div>
       <div className="grid gap-5 sm:grid-cols-2">
@@ -47,7 +47,7 @@ export default function NewBounty() {
         <div><label className="label" htmlFor="deadline">Deadline</label><input id="deadline" className="field [color-scheme:dark]" type="datetime-local" required value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-describedby="deadline-help" /><p id="deadline-help" className="mt-2 text-xs text-slate-500">Your local time. Stored as Unix seconds.</p></div>
       </div>
       {error && <ErrorMessage message={error} />}
-      <button className="button-primary w-full" disabled={busy} type="submit">{busy ? "Hashing & creating…" : publicKey ? "Create demo bounty" : "Connect Phantom to create"}</button>
+      <button className="button-primary w-full" disabled={busy} type="submit">{busy ? "Hashing & creating…" : publicKey ? (useMock ? "Create demo bounty" : "Create bounty") : "Connect Phantom to create"}</button>
     </form>
   </div>;
 }

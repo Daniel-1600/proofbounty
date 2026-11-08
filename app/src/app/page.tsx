@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { client, type BountyView } from "../../lib/client";
+import { client, useMock, type BountyView } from "../../lib/client";
 import { ErrorMessage, sol, StatusBadge, statusName } from "../components/display";
 import { LeanProof } from "../components/proof";
 
@@ -23,7 +23,7 @@ export default function Home() {
       <div><p className="mb-3 text-xs uppercase tracking-widest text-emerald-400">Lean 4 · Solana · 2 of 3 verifiers</p><h1 className="text-3xl font-semibold text-white">Proofs worth solving.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">Explore theorem rewards and watch independent verifiers reject cheats and approve valid proofs.</p></div>
       <Link href="/bounties/new" className="button-primary">+ Post a bounty</Link>
     </div>
-    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">Mock demo. Open a bounty to watch submissions and verifier votes arrive live.</div>
+    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">{useMock ? "Mock demo. Open a bounty to watch submissions and verifier votes arrive live." : "Solana devnet. Open a bounty to watch on-chain submissions and votes."}</div>
     <div className="flex flex-wrap gap-2" aria-label="Filter by status">{["All", "Open", "Solved", "Refunded"].map((name) => <button key={name} onClick={() => setFilter(name)} aria-pressed={filter === name} className={`rounded-lg border px-4 py-2 text-sm ${filter === name ? "border-emerald-700 bg-emerald-950/50 text-emerald-300" : "border-slate-800 text-slate-400 hover:border-slate-600"}`}>{name}</button>)}</div>
     {error && <ErrorMessage message={error} />}
     {loading && <p role="status" className="text-slate-400">Loading bounties…</p>}
