@@ -12,7 +12,9 @@ import { resolve } from "node:path";
 import { BN } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 import { bountyPda, explorerTx, putBlob, sha256Bytes } from "@proofbounty/shared";
-import { keyPath, loadEnv, loadKeypair, programFor } from "../agents/common";
+import {
+  keyPath, loadEnv, loadKeypair, programFor, runMain,
+} from "../agents/common";
 
 export function statementFrom(arg: string): string {
   if (!arg.endsWith(".lean") || !existsSync(arg)) return arg;
@@ -52,4 +54,4 @@ async function main(): Promise<void> {
   console.log(bounty.toBase58());
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+runMain(main);

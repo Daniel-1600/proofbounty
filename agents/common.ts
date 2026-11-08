@@ -65,13 +65,41 @@ export async function uploadAndSubmit(
   proof: string,
 ): Promise<Submitted> {
   const { uri } = await putBlob(proof);
+  const proofHash = sha256Bytes(proof);
   const [submission] = submissionPda(bounty, solver.publicKey, program.programId);
-  const signature = await program.methods
-    .submitProof(sha256Bytes(proof), uri)
-    .accountsPartial({ solver: solver.publicKey, bounty, submission })
-    .signers([solver])
-    .rpc();
-  return { submission, signature, proofUri: uri, transaction: explorerTx(signature) };
+  try {
+    const signature = await program.methods
+      .submitProof(proofHash, uri)
+      .accountsPartial({ solver: solver.publicKey, bounty, submission })
+      .signers([solver])
+      .rpc();
+    return { submission, signature, proofUri: uri, transaction: explorerTx(signature) };
+  } catch (error) {
+    // A confirmation timeout does not mean the transaction failed: it often
+    // lands moments later. If our submission account appears with our proof
+    // hash, it was submitted; resubmitting would fail since the PDA exists.
+    const signature: string = (error as { signature?: string })?.signature ?? "";
+    for (let i = 0; i < 10; i++) {
+      const existing = await (program.account as any).submission.fetchNullable(submission).catch(() => null);
+      if (existing && Buffer.from(existing.proofHash).equals(Buffer.from(proofHash))) {
+        return { submission, signature, proofUri: uri, transaction: signature ? explorerTx(signature) : "" };
+      }
+      await new Promise((r) => setTimeout(r, 3_000));
+    }
+    throw error;
+  }
+}
+
+/**
+ * Runs an entry point and always exits: web3.js can leave a confirmation
+ * websocket open (e.g. after a timeout), which would keep Node alive and hang
+ * scripts/demo.sh.
+ */
+export function runMain(main: () => Promise<void>): void {
+  main().then(
+    () => process.exit(process.exitCode ?? 0),
+    (error) => { console.error(error); process.exit(1); },
+  );
 }
 
 /** Prints a JSON log line and appends it to agents/logs/<agent>.jsonl. */

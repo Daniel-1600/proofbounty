@@ -5,8 +5,7 @@
 //
 //   npm -w agents run cheater -- <bounty-address>
 import {
-  bountyArg, fetchBounty, fetchStatement, keyPath, loadEnv, loadKeypair, logger,
-  programFor, uploadAndSubmit,
+  bountyArg, fetchBounty, fetchStatement, keyPath, loadEnv, loadKeypair, logger, programFor, runMain, uploadAndSubmit,
 } from "./common";
 
 export interface Cheat {
@@ -64,6 +63,4 @@ async function main(): Promise<void> {
   }
 }
 
-if (require.main === module) {
-  main().catch((error) => { console.error(error); process.exitCode = 1; });
-}
+if (require.main === module) runMain(main);

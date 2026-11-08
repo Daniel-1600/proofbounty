@@ -6,8 +6,7 @@
 //   npm -w agents run honest -- --local "<lean statement>"   (no chain, no store)
 import { checkProof } from "../checker/src/checkProof";
 import {
-  bountyArg, fetchBounty, fetchStatement, keyPath, loadEnv, loadKeypair, logger,
-  programFor, uploadAndSubmit,
+  bountyArg, fetchBounty, fetchStatement, keyPath, loadEnv, loadKeypair, logger, programFor, runMain, uploadAndSubmit,
 } from "./common";
 import { cleanProof, generate, modelName } from "./llm";
 
@@ -114,6 +113,4 @@ async function main(): Promise<void> {
   });
 }
 
-if (require.main === module) {
-  main().catch((error) => { console.error(error); process.exitCode = 1; });
-}
+if (require.main === module) runMain(main);

@@ -12,7 +12,9 @@ import { resolve } from "node:path";
 import {
   Keypair, LAMPORTS_PER_SOL, PublicKey, sendAndConfirmTransaction, SystemProgram, Transaction,
 } from "@solana/web3.js";
-import { connection, keyPath, loadEnv, loadKeypair, ROOT } from "../agents/common";
+import {
+  connection, keyPath, loadEnv, loadKeypair, ROOT, runMain,
+} from "../agents/common";
 
 const NAMES = ["honest", "cheater-0", "cheater-1", "cheater-2", "verifier-0", "verifier-1", "verifier-2"];
 const TARGET_SOL = Number(process.env.TARGET_SOL ?? 0.05);
@@ -71,4 +73,4 @@ async function main(): Promise<void> {
   console.log(`funder ${funder.publicKey.toBase58()} now has ${(await conn.getBalance(funder.publicKey)) / LAMPORTS_PER_SOL} SOL`);
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+runMain(main);
