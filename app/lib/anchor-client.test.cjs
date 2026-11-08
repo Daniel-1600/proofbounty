@@ -68,9 +68,9 @@ test("real Anchor IDL decodes accounts, filters proofs, uploads exact bytes and 
   // signed by a non-verifier that claims to be verifier 2.
   const { MEMO_PROGRAM_ID, encodeVoteMemo } = require("../../shared/src/program.ts");
   const outsider = Keypair.generate().publicKey;
-  const parsed = (signer, memo, withProgram = true) => ({
+  const parsed = (signature, signer, memo, withProgram = true) => ({
     blockTime: 1700000000,
-    transaction: { message: {
+    transaction: { signatures: [signature], message: {
       accountKeys: [{ pubkey: signer, signer: true, writable: true }],
       instructions: [
         ...(withProgram ? [{ programId: program.programId, accounts: [], data: "" }] : []),
@@ -79,19 +79,30 @@ test("real Anchor IDL decodes accounts, filters proofs, uploads exact bytes and 
     } },
   });
   const history = {
-    "spoof": parsed(outsider, { v: 2, ok: true, reason: "spoofed" }),
-    "vote-2": parsed(verifiers[2], { v: 2, ok: true, reason: "Lean accepted proof" }),
-    "vote-1": parsed(verifiers[1], { v: 1, ok: false, reason: "Forbidden axioms: sorryAx" }),
-    "vote-0": parsed(verifiers[0], { v: 0, ok: true, reason: "Lean accepted proof" }),
-    "submit": parsed(submission.solver, null),
+    "spoof": parsed("spoof", outsider, { v: 2, ok: true, reason: "spoofed" }),
+    "vote-2": parsed("vote-2", verifiers[2], { v: 2, ok: true, reason: "Lean accepted proof" }),
+    "vote-1": parsed("vote-1", verifiers[1], { v: 1, ok: false, reason: "Forbidden axioms: sorryAx" }),
+    "vote-0": parsed("vote-0", verifiers[0], { v: 0, ok: true, reason: "Lean accepted proof" }),
+    "submit": parsed("submit", submission.solver, null),
   };
   t.mock.method(Connection.prototype, "getSignaturesForAddress", async (address) => {
     assert.ok(address.equals(submissionAddress));
     // Newest first, as the RPC returns them.
     return Object.keys(history).map((signature) => ({ signature, err: null, blockTime: 1700000000 }));
   });
-  t.mock.method(Connection.prototype, "getParsedTransactions", async (signatures) => signatures.map((s) => history[s]));
+  // The first poll hits a rate limit after two reads; the next poll resumes from the cache.
+  let reads = 0;
+  const fetched = [];
+  t.mock.method(Connection.prototype, "getParsedTransaction", async (signature) => {
+    if (++reads === 3) throw new Error("429 Too Many Requests");
+    fetched.push(signature);
+    return history[signature];
+  });
+  const [partial] = await anchorClient.listSubmissions(bountyAddress.toBase58());
+  // Reads newest first: spoof and vote-2 succeed, then the 429 stops this poll.
+  assert.deepEqual(partial.votes.map((vote) => vote.transaction), ["", "", "vote-2"]);
   const [proofView] = await anchorClient.listSubmissions(bountyAddress.toBase58());
+  assert.equal(new Set(fetched).size, fetched.length, "each transaction is read once");
   assert.equal(proofView.proof, proof);
   assert.deepEqual(proofView.votes.map((vote) => vote.approve), [true, false, true]);
   assert.deepEqual(proofView.votes.map((vote) => vote.reason), ["Lean accepted proof", "Forbidden axioms: sorryAx", "Lean accepted proof"]);

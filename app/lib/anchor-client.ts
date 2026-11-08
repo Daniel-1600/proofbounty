@@ -78,9 +78,18 @@ async function submissionHistory(address: PublicKey, verifiers: PublicKey[]): Pr
   // submit_proof plus at most three votes; transactions are immutable, so cache them.
   const signatures = (await connection.getSignaturesForAddress(address, { limit: 20 }, "confirmed")).filter((s) => !s.err);
   const missing = signatures.map((s) => s.signature).filter((signature) => !parsedTransactions.has(signature));
-  if (missing.length) {
-    const fetched = await connection.getParsedTransactions(missing, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
-    missing.forEach((signature, i) => parsedTransactions.set(signature, fetched[i] ?? null));
+  // One transaction at a time: public devnet RPC rate-limits transaction reads
+  // per method, and a batch counts as several. On an error, keep what we have;
+  // the next poll continues from the cache. (Single reads also avoid relying on
+  // batch responses coming back in request order, which they need not.)
+  for (const signature of missing) {
+    try {
+      const tx = await connection.getParsedTransaction(signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      if (tx) parsedTransactions.set(signature, tx);
+    } catch {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
   const history: ChainHistory = { votes: new Map() };
   for (const { signature, blockTime } of [...signatures].reverse()) {
@@ -172,7 +181,10 @@ export const anchorClient: BountyClient = {
     if (!bounty) return [];
     // First field after the 8-byte account discriminator is the bounty public key.
     const rows = await listAccounts<Submission>(currentProgram as unknown as Program, "submission", [submissionBountyFilter(key)]);
-    return Promise.all(rows.map(({ publicKey, account }) => submissionView(publicKey, account, bounty)));
+    // One submission at a time: parallel history reads trip public-RPC rate limits.
+    const views: SubmissionView[] = [];
+    for (const { publicKey, account } of rows) views.push(await submissionView(publicKey, account, bounty));
+    return views;
   },
   async createBounty(input) {
     const signTransaction = input.signTransaction;
