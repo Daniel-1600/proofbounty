@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "honest": "tsx honest-agent.ts",
-    "cheater": "tsx cheater-agent.ts"
+    "cheater": "tsx cheater-agent.ts",
+    "test": "mocha -r tsx '*.test.ts'",
+    "fund": "tsx ../scripts/fund-agents.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.65.0",
+    "openai": "^5.0.0",
     "@proofbounty/checker": "0.1.0",
     "@proofbounty/shared": "0.1.0"
   }
